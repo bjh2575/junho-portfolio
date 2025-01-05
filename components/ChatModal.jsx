@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const ChatModal = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false); 
+  const [errorMessage, setErrorMessage] = useState("");
   const [messages, setMessages] = useState([
     { id: 1, text: "궁금한 점을 물어보세요", sender: "bot" },
   ]);
   const [inputValue, setInputValue] = useState("");
+  const [isInputDisabled, setIsInputDisabled] = useState(false); 
   const inputRef = useRef(null);
   const modalRef = useRef(null);
+  const messagesEndRef = useRef(null);  // 메시지 끝에 스크롤을 위한 ref
 
   // 모달 열기
   const openModal = () => {
@@ -28,13 +31,37 @@ const ChatModal = () => {
         { id: prevMessages.length + 1, text: inputValue, sender: "user" },
       ]);
       setInputValue("");
+      
+      // 입력 비활성화
+      setIsInputDisabled(true);
+      
+      // 봇의 자동 응답 추가
+      setTimeout(() => {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { id: prevMessages.length + 1, text: "잠시만 기다려주세요.", sender: "bot" },
+        ]);
+        // 자동 응답 후 입력 활성화
+        setIsInputDisabled(false);
+
+      }, 1000);
+    }  else {
+      // 공백 입력 처리
+      setErrorMessage("※ 공백은 입력할 수 없습니다.");
+      setTimeout(() => {
+        setErrorMessage(""); // 0.8초 후 오류 메시지 숨기기
+      }, 800);
+    }
+
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
   };
 
   // Enter 키로 메시지 전송
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      handleSendMessage();
+      handleSendMessage();     
     }
   };
 
@@ -121,6 +148,8 @@ const ChatModal = () => {
                   </span>
                 </div>
               ))}
+              {/* 메시지 끝을 위한 ref */}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* 입력 필드 */}
@@ -133,14 +162,22 @@ const ChatModal = () => {
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown} // Enter 키 이벤트 추가
                 ref={inputRef} // 자동 초점 설정
+                disabled={isInputDisabled} // 입력 비활성화
               />
               <button
                 className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
                 onClick={handleSendMessage}
+                disabled={isInputDisabled} // 버튼 비활성화
               >
                 Send
               </button>
             </div>
+            {/* 오류 메시지 표시 */}
+            {errorMessage && (
+            <div className=" text-red-500 mt-2 font-semibold pl-4 pb-4">
+              {errorMessage}
+            </div>
+            )}
           </div>
         </div>
       )}
