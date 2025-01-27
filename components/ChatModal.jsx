@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const ChatModal = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false); 
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [messages, setMessages] = useState([
     { id: 1, text: "궁금한 점을 물어보세요", sender: "bot" },
   ]);
   const [inputValue, setInputValue] = useState("");
-  const [isInputDisabled, setIsInputDisabled] = useState(false); 
+  const [isInputDisabled, setIsInputDisabled] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // 로딩 상태 추가
   const inputRef = useRef(null);
   const modalRef = useRef(null);
-  const messagesEndRef = useRef(null);  // 메시지 끝에 스크롤을 위한 ref
+  const messagesEndRef = useRef(null); // 메시지 끝에 스크롤을 위한 ref
 
   // 모달 열기
   const openModal = () => {
@@ -24,7 +25,33 @@ const ChatModal = () => {
     document.body.style.overflow = ""; // 배경 스크롤 복구
   };
 
-  const handleSendMessage = () => {
+  // OpenAI API 호출
+  const fetchBotReply = async (userMessage) => {
+    try {
+      const response = await fetch("http://localhost:5000/AiChat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: userMessage }),
+      });
+
+      const data = await response.json();
+      console.log(data);
+      if (response.ok) {
+        const botMessage = data.messages[data.messages.length - 1];
+        return botMessage ? botMessage.content : "봇의 응답을 찾을 수 없습니다.";
+      } else {
+        throw new Error(data.message || "알 수 없는 오류 발생");
+      }
+    } catch (error) {
+      setErrorMessage(error.message);
+      return "봇과의 통신 중 문제가 발생했습니다.";
+    }
+  };
+
+  // 메시지 보내기
+  const handleSendMessage = async () => {
     if (inputValue.trim()) {
       setMessages((prevMessages) => [
         ...prevMessages,
@@ -32,36 +59,34 @@ const ChatModal = () => {
       ]);
       setInputValue("");
       
-      // 입력 비활성화
+      // 입력 및 로딩 상태 비활성화
       setIsInputDisabled(true);
-      
-      // 봇의 자동 응답 추가
-      setTimeout(() => {
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { id: prevMessages.length + 1, text: "잠시만 기다려주세요.", sender: "bot" },
-        ]);
-        // 자동 응답 후 입력 활성화
-        setIsInputDisabled(false);
+      setIsLoading(true); // 로딩 시작
 
-      }, 1000);
-    }  else {
-      // 공백 입력 처리
+      // 봇의 응답을 기다림
+      const botReply =
+        (await fetchBotReply(inputValue)) || "응답을 받을 수 없습니다.";
+
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { id: prevMessages.length + 1, text: botReply, sender: "bot" },
+      ]);
+      
+      // 상태 초기화
+      setIsInputDisabled(false);
+      setIsLoading(false); // 로딩 끝
+    } else {
       setErrorMessage("※ 공백은 입력할 수 없습니다.");
       setTimeout(() => {
         setErrorMessage(""); // 0.8초 후 오류 메시지 숨기기
       }, 800);
-    }
-
-    if (inputRef.current) {
-      inputRef.current.focus();
     }
   };
 
   // Enter 키로 메시지 전송
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      handleSendMessage();     
+      handleSendMessage();
     }
   };
 
@@ -71,6 +96,13 @@ const ChatModal = () => {
       closeModal();
     }
   };
+
+  // 메시지 자동으로 최하단 위치
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   // 모달 내 스크롤 고정 처리
   useEffect(() => {
@@ -83,7 +115,6 @@ const ChatModal = () => {
     if (isModalOpen) {
       document.addEventListener("wheel", handleScrollLock, { passive: false });
       document.addEventListener("mousedown", handleOutsideClick);
-      if (inputRef.current) inputRef.current.focus(); // 자동 초점 설정
     } else {
       document.removeEventListener("wheel", handleScrollLock);
       document.removeEventListener("mousedown", handleOutsideClick);
@@ -93,6 +124,13 @@ const ChatModal = () => {
       document.removeEventListener("wheel", handleScrollLock);
       document.removeEventListener("mousedown", handleOutsideClick);
     };
+  }, [isModalOpen]);
+
+  // 포커스를 모달 열렸을 때 자동으로 설정
+  useEffect(() => {
+    if (isModalOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
   }, [isModalOpen]);
 
   return (
@@ -109,7 +147,7 @@ const ChatModal = () => {
       {isModalOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onWheel={(e) => e.stopPropagation()} // 모달 외부로 이벤트 전파 차단
+          onWheel={(e) => e.stopPropagation()}
         >
           <div
             ref={modalRef}
@@ -132,9 +170,7 @@ const ChatModal = () => {
                 <div
                   key={message.id}
                   className={`${
-                    message.sender === "bot"
-                      ? "text-left"
-                      : "text-right"
+                    message.sender === "bot" ? "text-left" : "text-right"
                   }`}
                 >
                   <span
@@ -144,39 +180,46 @@ const ChatModal = () => {
                         : "bg-blue-500 text-white"
                     }`}
                   >
-                    {message.text}
+                    <pre style={{ fontFamily: "var(--font-inter)" }}>
+                      {message.text}
+                    </pre>
                   </span>
                 </div>
               ))}
-              {/* 메시지 끝을 위한 ref */}
+
               <div ref={messagesEndRef} />
             </div>
 
             {/* 입력 필드 */}
             <div className="p-4 border-t flex items-center space-x-2">
-              <input
-                type="text"
-                className="flex-1 border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Type a message..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown} // Enter 키 이벤트 추가
-                ref={inputRef} // 자동 초점 설정
-                disabled={isInputDisabled} // 입력 비활성화
-              />
+              <div className="flex-1 border rounded-lg px-3 py-2 flex items-center">
+                {isLoading ? (
+                  <div className="loader border-t-4 border-blue-500 rounded-full w-5 h-5 animate-spin mx-auto"></div>
+                ) : (
+                  <input
+                    type="text"
+                    className="w-full outline-none"
+                    placeholder="Type a message..."
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    ref={inputRef}
+                    disabled={isInputDisabled}
+                  />
+                )}
+              </div>
               <button
                 className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
                 onClick={handleSendMessage}
-                disabled={isInputDisabled} // 버튼 비활성화
+                disabled={isInputDisabled}
               >
                 Send
               </button>
             </div>
-            {/* 오류 메시지 표시 */}
             {errorMessage && (
-            <div className=" text-red-500 mt-2 font-semibold pl-4 pb-4">
-              {errorMessage}
-            </div>
+              <div className="text-red-500 mt-2 font-semibold pl-4 pb-4">
+                {errorMessage}
+              </div>
             )}
           </div>
         </div>
