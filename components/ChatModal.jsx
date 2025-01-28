@@ -28,7 +28,7 @@ const ChatModal = () => {
   // OpenAI API 호출
   const fetchBotReply = async (userMessage) => {
     try {
-      const response = await fetch("http://bavid.site:5000/AiChat", {
+      const response = await fetch("http://bavid.site:5000/AIChat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
