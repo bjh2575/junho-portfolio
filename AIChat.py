@@ -22,7 +22,26 @@ ASSISTANT_ID = os.getenv("ASSISTANT_ID")
 # 전역 변수로 스레드 ID 관리
 THREAD_ID = None
 
-@app.route('/AiChat', methods=['POST'])
+@app.route('/AIChat', methods=['OPTIONS', 'POST'])
+def handle_chat():
+    if request.method == 'OPTIONS':
+        response = jsonify({"message": "CORS preflight response"})
+        
+        # 요청한 Origin 값을 그대로 반영
+        origin = request.headers.get('Origin')
+        if origin:
+            response.headers.add('Access-Control-Allow-Origin', origin)
+        
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        response.status_code = 200  # HTTP OK 상태 코드 추가
+        return response
+
+    return submit_message()
+
+
+
 def submit_message():
     global THREAD_ID
 
@@ -80,8 +99,8 @@ def create_new_thread(user_message):
     except Exception as e:
         raise RuntimeError(f"Failed to create new thread: {e}")
 
-def wait_on_run(run, timeout=30):
-    # 타임아웃 시간 설정 (기본값 30초)
+def wait_on_run(run, timeout=60):
+    # 타임아웃 시간 설정 (기본값 60초)
     start_time = time.time()
 
     while run.status in ["queued", "in_progress"]:
